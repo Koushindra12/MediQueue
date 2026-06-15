@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queue-Cure | Patient Waiting Room</title>
+    <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #1a56db;
+            --primary-dark: #1342b3;
+            --primary-light: #e8effd;
+            --secondary: #059669;
+            --secondary-light: #d1fae5;
+            --accent: #7c3aed;
+            --warning: #d97706;
+            --danger: #dc2626;
+            --dark: #111827;
+            --dark-2: #1f2937;
+            --gray: #6b7280;
+            --gray-light: #9ca3af;
+            --border: #e5e7eb;
+            --bg: #f3f4f6;
+            --white: #ffffff;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --radius-lg: 20px;
+            --shadow: 0 4px 16px rgba(0,0,0,0.10);
+            --shadow-lg: 0 8px 40px rgba(0,0,0,0.15);
+            --transition: all 0.3s cubic-bezier(.4,0,.2,1);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--dark);
+            min-height: 100vh;
+        }
+
+        /* ========================================
+           HEADER
+        ======================================== */
+        .top-bar {
+            background: linear-gradient(135deg, var(--primary) 0%, #4338ca 100%);
+            color: white;
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .top-bar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .top-bar-logo {
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            backdrop-filter: blur(10px);
+        }
+
+        .top-bar-name {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .top-bar-sub {
+            font-size: 11px;
+            opacity: 0.75;
+        }
+
+        .top-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .live-time {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .live-date {
+            font-size: 11px;
+            opacity: 0.75;
+            text-align: right;
+        }
+
+        /* ========================================
+           HERO - NOW SERVING
+        ======================================== */
+        .hero-section {
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #1a56db 100%);
+            padding: 40px 24px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: -100px;
+            left: -100px;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(26,86,219,0.3), transparent);
+            border-radius: 50%;
+        }
+
+        .hero-section::after {
+            content: '';
+            position: absolute;
+            bottom: -80px;
+            right: -80px;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(124,58,237,0.2), transparent);
+            border-radius: 50%;
+        }
+
+        .hero-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .now-serving-token {
+            font-size: 96px;
+            font-weight: 900;
+            color: white;
+            line-height: 1;
+            letter-spacing: -4px;
+            margin: 8px 0;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .now-serving-name {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 6px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .now-serving-dept {
+            font-size: 14px;
+            color: rgba(255,255,255,0.75);
+            margin-bottom: 24px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .no-serving-hero {
+            padding: 20px 0;
+        }
+
+        .no-serving-emoji { font-size: 64px; }
+        .no-serving-text-hero {
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+            margin: 12px 0 8px;
+        }
+        .no-serving-sub-hero {
+            font-size: 14px;
+            color: rgba(255,255,255,0.65);
+        }
+
+        /* ========================================
+           TOKEN CHECKER
+        ======================================== */
+        .token-checker {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: var(--radius-lg);
+            padding: 20px 24px;
+            max-width: 420px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .checker-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.85);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checker-input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .checker-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1.5px solid rgba(255,255,255,0.3);
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 18px;
+            font-weight: 700;
+            outline: none;
+            font-family: inherit;
+            text-align: center;
+            letter-spacing: 2px;
+        }
+
+        .checker-input::placeholder { color: rgba(255,255,255,0.4); font-weight: 400; font-size: 14px; }
+        .checker-input:focus { border-color: white; background: rgba(255,255,255,0.2); }
+
+        .checker-btn {
+            padding: 12px 20px;
+            background: white;
+            color: var(--primary);
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: inherit;
+            white-space: nowrap;
+        }
+
+        .checker-btn:hover { background: #f0f7ff; transform: translateY(-1px); }
+        .checker-btn:active { transform: scale(0.97); }
+
+        .checker-result {
+            margin-top: 12px;
+        }
+
+        /* ========================================
+           MAIN CONTENT
+        ======================================== */
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 360px;
+            gap: 24px;
+        }
+
+        /* ========================================
+           CARDS
+        ======================================== */
+        .card {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .card:last-child { margin-bottom: 0; }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title i { color: var(--primary); }
+
+        /* ========================================
+           QUEUE TABLE
+        ======================================== */
+        .queue-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .queue-table th {
+            background: var(--bg);
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: var(--gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .queue-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--bg);
+            font-size: 13.5px;
+        }
+
+        .queue-table tr:last-child td { border-bottom: none; }
+        .queue-table tbody tr:hover { background: var(--bg); }
+
+        .position-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            background: var(--primary-light);
+            color: var(--primary);
+        }
+
+        .position-badge.pos-1 { background: #fef9c3; color: #713f12; }
+        .position-badge.pos-2 { background: #f3f4f6; color: #374151; }
+        .position-badge.pos-3 { background: #fff7ed; color: #9a3412; }
+
+        .token-chip {
+            display: inline-block;
+            background: var(--primary-light);
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 800;
+            padding: 3px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .dept-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: var(--secondary-light);
+            color: var(--secondary);
+            font-size: 11.5px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+        }
+
+        /* ========================================
+           MY TOKEN STATUS
+        ======================================== */
+        .my-token-card {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            border-radius: var(--radius);
+            padding: 24px;
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .my-token-card.show { display: block; }
+
+        .my-token-label {
+            font-size: 11px;
+            font-weight: 600;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 8px;
+        }
+
+        .my-token-number {
+            font-size: 52px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .my-token-name { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+
+        .my-token-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .my-token-info-item {
+            background: rgba(255,255,255,0.15);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .info-label { font-size: 10px; opacity: 0.75; text-transform: uppercase; letter-spacing: 1px; }
+        .info-value { font-size: 18px; font-weight: 800; margin-top: 2px; }
+
+        .my-token-status {
+            background: rgba(255,255,255,0.2);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .alert-called {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            color: #052e16;
+            font-weight: 700;
+            margin-bottom: 20px;
+            animation: alertPulse 1s infinite;
+        }
+
+        @keyframes alertPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(74,222,128,0); }
+        }
+
+        /* ========================================
+           INFO CARDS
+        ======================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .info-card {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        .info-card-icon { font-size: 28px; margin-bottom: 8px; }
+        .info-card-value { font-size: 24px; font-weight: 800; color: var(--dark); line-height: 1; }
+        .info-card-label { font-size: 11px; color: var(--gray); margin-top: 4px; font-weight: 500; }
+
+        /* ========================================
+           TIPS
+        ======================================== */
+        .tips-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .tips-list li {
+            padding: 10px 16px;
+            font-size: 13px;
+            color: var(--dark-3);
+            border-bottom: 1px solid var(--bg);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            line-height: 1.5;
+        }
+
+        .tips-list li:last-child { border-bottom: none; }
+        .tips-list li i { color: var(--primary); margin-top: 2px; flex-shrink: 0; }
+
+        /* ========================================
+           EMPTY STATE
+        ======================================== */
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+        }
+
+        .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.4; }
+        .empty-title { font-size: 16px; font-weight: 600; color: var(--dark); }
+        .empty-sub { font-size: 13px; color: var(--gray); margin-top: 6px; }
+
+        /* ========================================
+           TOAST
+        ======================================== */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            padding: 14px 18px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            min-width: 300px;
+            max-width: 380px;
+            pointer-events: all;
+            transform: translateX(120%);
+            transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+            border-left: 4px solid var(--primary);
+        }
+
+        .toast.show { transform: translateX(0); }
+        .toast.success { border-color: var(--secondary); }
+        .toast.error { border-color: var(--danger); }
+        .toast.warning { border-color: var(--warning); }
+
+        .toast-icon { font-size: 18px; }
+        .toast-content { flex: 1; }
+        .toast-title { font-size: 13.5px; font-weight: 700; color: var(--dark); }
+        .toast-msg { font-size: 12px; color: var(--gray); margin-top: 2px; }
+
+        /* ========================================
+           STATUS BADGE
+        ======================================== */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-waiting { background: #dbeafe; color: #1d4ed8; }
+        .badge-called { background: #fef3c7; color: #92400e; }
+        .badge-consultation { background: #d1fae5; color: #065f46; }
+        .badge-completed { background: #f3f4f6; color: #6b7280; }
+
+        /* ========================================
+           RESPONSIVE
+        ======================================== */
+        @media (max-width: 900px) {
+            .content-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 600px) {
+            .now-serving-token { font-size: 64px; }
+            .now-serving-name { font-size: 18px; }
+            .info-grid { grid-template-columns: 1fr 1fr; }
+            .top-bar { padding: 0 16px; }
+            .live-time { font-size: 16px; }
+            .hero-section { padding: 28px 16px; }
+            .token-checker { padding: 16px; }
+            .my-token-number { font-size: 40px; }
+            .main-container { padding: 16px 12px; }
+        }
+
+        @media (max-width: 400px) {
+            .now-serving-token { font-size: 48px; }
+            .info-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* Animation */
+        .fade-in {
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .token-number-animate {
+            animation: tokenBounce 0.6s cubic-bezier(.36,.07,.19,.97);
+        }
+
+        @keyframes tokenBounce {
+            0% { transform: scale(0.5); opacity: 0; }
+            60% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<header class="top-bar">
+    <div class="top-bar-brand">
+        <div class="top-bar-logo">
+            <i class="fas fa-hospital-user"></i>
+        </div>
+        <div>
+            <div class="top-bar-name">Queue-Cure</div>
+            <div class="top-bar-sub">Patient Waiting Room</div>
+        </div>
+    </div>
+    <div class="top-bar-right">
+        <div>
+            <div class="live-time" id="liveTime">--:--:--</div>
+            <div class="live-date" id="liveDate">Loading...</div>
+        </div>
+    </div>
+</header>
+
+<!-- Hero / Now Serving -->
+<div class="hero-section">
+    <div class="hero-label">
+        <div class="live-dot"></div>
+        Now Serving
+    </div>
+    <div id="heroContent">
+        <div class="no-serving-hero">
+            <div class="no-serving-emoji">🏥</div>
+            <div class="no-serving-text-hero">Ready to Serve</div>
+            <div class="no-serving-sub-hero">Your next patient will appear here</div>
+        </div>
+    </div>
+
+    <!-- Token Checker -->
+    <div class="token-checker">
+        <div class="checker-title">
+            <i class="fas fa-search"></i> Check Your Token Status
+        </div>
+        <div class="checker-input-row">
+            <input type="number" class="checker-input" id="tokenInput" 
+                   placeholder="Enter token #" min="1" max="999"
+                   onkeydown="if(event.key==='Enter') checkMyToken()">
+            <button class="checker-btn" onclick="checkMyToken()">
+                <i class="fas fa-search"></i> Check
+            </button>
+        </div>
+        <div class="checker-result" id="checkerResult"></div>
+    </div>
+</div>
+
+<!-- Main Container -->
+<div class="main-container">
+
+    <!-- Called Alert (shown when your number is called) -->
+    <div class="alert-called" id="calledAlert" style="display:none;">
+        <div style="font-size: 32px; margin-bottom: 8px;">🔔</div>
+        <div style="font-size: 20px; font-weight: 800;">Your Turn!</div>
+        <div id="calledAlertText" style="font-size: 14px; margin-top: 4px; opacity: 0.85;">Please proceed to the consultation room</div>
+    </div>
+
+    <!-- My Token Status (shown after checking) -->
+    <div class="my-token-card" id="myTokenCard">
+        <div class="my-token-label">Your Token</div>
+        <div class="my-token-number" id="myTokenNumber">---</div>
+        <div class="my-token-name" id="myTokenPatient"></div>
+        <div class="my-token-info">
+            <div class="my-token-info-item">
+                <div class="info-label">Position</div>
+                <div class="info-value" id="myTokenPosition">-</div>
+            </div>
+            <div class="my-token-info-item">
+                <div class="info-label">Wait Time</div>
+                <div class="info-value" id="myTokenWait">-</div>
+            </div>
+        </div>
+        <div class="my-token-status" id="myTokenStatus">Waiting...</div>
+    </div>
+
+    <div class="content-grid">
+        <!-- Left Column -->
+        <div>
+            <!-- Stats -->
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-card-icon">⏳</div>
+                    <div class="info-card-value" id="displayWaiting">0</div>
+                    <div class="info-card-label">Waiting</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-card-icon">✅</div>
+                    <div class="info-card-value" id="displayCompleted">0</div>
+                    <div class="info-card-label">Completed</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-card-icon">⏱️</div>
+                    <div class="info-card-value" id="displayAvgTime">15</div>
+                    <div class="info-card-label">Avg. Min/Patient</div>
+                </div>
+                <div class="info-card">
+                    <div class="info-card-icon">🎫</div>
+                    <div class="info-card-value" id="displayTotal">0</div>
+                    <div class="info-card-label">Total Today</div>
+                </div>
+            </div>
+
+            <!-- Queue Table -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-list-ol"></i> Upcoming Queue
+                    </div>
+                    <span style="font-size:12px; color:var(--gray); font-weight:500;">
+                        Next 10 patients
+                    </span>
+                </div>
+                <div id="queueTableContainer">
+                    <div class="empty-state">
+                        <div class="empty-icon">📋</div>
+                        <div class="empty-title">Queue is empty</div>
+                        <div class="empty-sub">No patients currently waiting</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div>
+            <!-- Clinic Info -->
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-hospital"></i> Clinic Info</div>
+                </div>
+                <div style="padding: 16px 20px;">
+                    <div style="display:flex; flex-direction:column; gap:12px;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="width:36px;height:36px;background:var(--primary-light);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--primary);flex-shrink:0;">
+                                <i class="fas fa-map-marker-alt"></i>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;">Address</div>
+                                <div style="font-size:13px;font-weight:600;">Queue-Cure Medical Center</div>
+                                <div style="font-size:12px;color:var(--gray);">123 Health Street, Medical District</div>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="width:36px;height:36px;background:var(--secondary-light);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--secondary);flex-shrink:0;">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;">Hours</div>
+                                <div style="font-size:13px;font-weight:600;">Mon - Sat: 9:00 AM - 5:00 PM</div>
+                                <div style="font-size:12px;color:var(--gray);">Sunday: Emergency Only</div>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="width:36px;height:36px;background:#ede9fe;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0;">
+                                <i class="fas fa-phone"></i>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:var(--gray);font-weight:600;text-transform:uppercase;">Contact</div>
+                                <div style="font-size:13px;font-weight:600;">+1-800-QUEUECURE</div>
+                                <div style="font-size:12px;color:var(--gray);">For emergencies call 911</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tips -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title"><i class="fas fa-lightbulb"></i> Waiting Tips</div>
+                </div>
+                <ul class="tips-list">
+                    <li><i class="fas fa-mobile-alt"></i> Keep your phone available for notifications</li>
+                    <li><i class="fas fa-id-card"></i> Have your token QR code ready</li>
+                    <li><i class="fas fa-clipboard-list"></i> Prepare to describe your symptoms clearly</li>
+                    <li><i class="fas fa-pills"></i> List all medications you're currently taking</li>
+                    <li><i class="fas fa-bell"></i> Stay in the waiting area when your number is near</li>
+                    <li><i class="fas fa-question-circle"></i> Ask reception for any assistance</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ========================================
+// STATE
+// ========================================
+const state = {
+    socket: null,
+    myToken: null,
+    currentServing: null,
+    queueData: [],
+    stats: {}
+};
+
+// ========================================
+// CLOCK
+// ========================================
+function updateClock() {
+    const now = new Date();
+    document.getElementById('liveTime').textContent = now.toLocaleTimeString('en-US', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit'
+    });
+    document.getElementById('liveDate').textContent = now.toLocaleDateString('en-US', {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    });
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+
+// ========================================
+// SOCKET.IO
+// ========================================
+function initSocket() {
+    state.socket = io({
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 1000
+    });
+
+    state.socket.on('connect', () => {
+        state.socket.emit('join_queue_room', { room: 'queue_updates' });
+        console.log('✅ Patient socket connected');
+    });
+
+    state.socket.on('queue_update', (data) => {
+        if (data.stats) updateDisplayStats(data.stats);
+        if (data.current_serving !== undefined) updateHeroServing(data.current_serving);
+        if (data.active_queue) {
+            state.queueData = data.active_queue;
+            renderQueueTable();
+        }
+        
+        // Check if my token was called
+        if (state.myToken && data.current_serving) {
+            if (data.current_serving.token_number === state.myToken) {
+                showCalledAlert(data.current_serving);
+            }
+        }
+    });
+
+    state.socket.on('patient_called', (data) => {
+        if (state.myToken && data.token_number === state.myToken) {
+            showCalledAlert(data);
+            showToast('success', '🎉 Your Turn!', data.message);
+        }
+    });
+
+    state.socket.on('patient_called_broadcast', (data) => {
+        showToast('info', '📢 ' + data.message, 'Please proceed to consultation room');
+    });
+
+    state.socket.on('position_update', 
