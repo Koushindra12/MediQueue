@@ -72,17 +72,24 @@ class DoctorModel:
         if not update_data:
             return False
 
-        # Type coercions
         if 'name' in update_data:
             update_data['name'] = update_data['name'].strip().title()
+
         if 'email' in update_data:
             update_data['email'] = update_data['email'].strip().lower()
-        if 'experience_years' in update_data:
-    value = str(update_data['experience_years']).strip()
-    update_data['experience_years'] = int(value) if value else 0
+
+        if update_data.get('experience_years'):
+         value = str(update_data['experience_years']).strip()
+         update_data['experience_years'] = int(value) if value else 0
+        else:
+         update_data['experience_years'] = 0
+
+
+    
+
         if 'consultation_fee' in update_data:
-    value = str(update_data['consultation_fee']).strip()
-    update_data['consultation_fee'] = float(value) if value else 0.0
+            value = str(update_data['consultation_fee']).strip()
+            update_data['consultation_fee'] = float(value) if value else 0.0
 
         update_data['updated_at'] = datetime.utcnow()
 
@@ -90,7 +97,8 @@ class DoctorModel:
             {'_id': ObjectId(doctor_id)},
             {'$set': update_data}
         )
-        return result.modified_count > 0
+   
+        return result.matched_count > 0
 
     @staticmethod
     def deactivate_doctor(doctor_id: str) -> bool:
@@ -136,11 +144,13 @@ class DoctorModel:
 
     @staticmethod
     def serialize(doctor: dict) -> dict:
-        """Convert MongoDB document to JSON-serializable dict."""
-        if doctor:
-            doctor['_id'] = str(doctor['_id'])
-            if doctor.get('created_at'):
-                doctor['created_at'] = doctor['created_at'].isoformat()
-            if doctor.get('updated_at'):
-                doctor['updated_at'] = doctor['updated_at'].isoformat()
-        return doctor
+        """Convert MongoDB document to JSON-serializable dict (non-mutating)."""
+        if not doctor:
+            return doctor
+        doc = dict(doctor)          # shallow copy — never mutate the original
+        doc['_id'] = str(doc['_id'])
+        if doc.get('created_at') and not isinstance(doc['created_at'], str):
+            doc['created_at'] = doc['created_at'].isoformat()
+        if doc.get('updated_at') and not isinstance(doc['updated_at'], str):
+            doc['updated_at'] = doc['updated_at'].isoformat()
+        return doc
