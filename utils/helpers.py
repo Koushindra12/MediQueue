@@ -8,9 +8,13 @@ logger = logging.getLogger(__name__)
 
 
 def validate_phone(phone: str) -> bool:
-    """Validate phone number format."""
-    pattern = r'^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$'
-    return bool(re.match(pattern, phone.strip()))
+    """Validate phone number format — accepts international and local formats."""
+    if not phone:
+        return False
+    # Strip all non-digit characters (except leading +) for length check
+    digits_only = re.sub(r'[^\d]', '', phone.strip())
+    # Accept 7-15 digit phone numbers (international range)
+    return 7 <= len(digits_only) <= 15
 
 
 def validate_email(email: str) -> bool:

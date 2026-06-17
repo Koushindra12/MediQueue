@@ -1,6 +1,7 @@
 from models.queue_model import QueueModel
 from models.patient_model import PatientModel
 from models.consultation_model import ConsultationModel
+from models.doctor_model import DoctorModel
 from services.token_service import TokenService
 from services.waittime_service import WaitTimeService
 from utils.qr_generator import QRGenerator
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class QueueService:
     """Main queue management service."""
-    
+
     DEPARTMENTS = [
         'General Medicine',
         'Cardiology',
@@ -26,8 +27,9 @@ class QueueService:
         'ENT',
         'Dental'
     ]
-    
-    DOCTORS = {
+
+    # Fallback static doctor map (used if no doctors in DB yet)
+    _FALLBACK_DOCTORS = {
         'General Medicine': 'Dr. Sarah Johnson',
         'Cardiology': 'Dr. Michael Chen',
         'Orthopedics': 'Dr. Robert Williams',
@@ -39,14 +41,25 @@ class QueueService:
         'ENT': 'Dr. Jennifer Taylor',
         'Dental': 'Dr. Christopher Brown'
     }
-    
+
+    @staticmethod
+    def get_doctor_for_department(department: str) -> str:
+        """Get the primary active doctor for a department (dynamic lookup with fallback)."""
+        try:
+            dept_map = DoctorModel.get_department_doctor_map()
+            if department in dept_map:
+                return dept_map[department]
+        except Exception as e:
+            logger.warning(f"Dynamic doctor lookup failed, using fallback: {e}")
+        return QueueService._FALLBACK_DOCTORS.get(department, 'Dr. General Physician')
+
     @staticmethod
     def register_and_queue(patient_data: dict, queue_data: dict) -> dict:
         """Register patient and add to queue."""
         try:
             # Check if patient exists by phone
             existing_patient = PatientModel.find_by_phone(patient_data.get('phone'))
-            
+
             if existing_patient:
                 patient = existing_patient
                 PatientModel.increment_visit_count(str(patient['_id']))
@@ -55,19 +68,19 @@ class QueueService:
                 # Create new patient
                 patient = PatientModel.create_patient(patient_data)
                 logger.info(f"New patient created: {patient['name']}")
-            
+
             # Generate token
             token_number = TokenService.generate_token()
-            
-            # Get department and doctor
+
+            # Get department and doctor (dynamic)
             department = queue_data.get('department', 'General Medicine')
-            doctor = QueueService.DOCTORS.get(department, 'Dr. General Physician')
-            
+            doctor = queue_data.get('doctor') or QueueService.get_doctor_for_department(department)
+
             # Calculate wait time
             waiting_count = len(QueueModel.get_waiting_queue())
             avg_time = 15  # default
             estimated_wait = waiting_count * avg_time
-            
+
             # Generate QR code
             qr_data = {
                 'token': token_number,
@@ -75,7 +88,7 @@ class QueueService:
                 'date': datetime.utcnow().date().isoformat()
             }
             qr_path = QRGenerator.generate_queue_qr(token_number, qr_data)
-            
+
             # Add to queue
             queue_entry_data = {
                 'patient_id': str(patient['_id']),
@@ -91,12 +104,12 @@ class QueueService:
                 'qr_code_path': qr_path,
                 'notes': queue_data.get('notes', '')
             }
-            
+
             queue_entry = QueueModel.add_to_queue(queue_entry_data)
-            
+
             # Recalculate wait time
             wait_info = WaitTimeService.calculate_wait_time(token_number)
-            
+
             return {
                 'success': True,
                 'patient': PatientModel.serialize(patient),
@@ -106,11 +119,11 @@ class QueueService:
                 'token_display': TokenService.get_token_display(token_number),
                 'qr_code': qr_path
             }
-            
+
         except Exception as e:
             logger.error(f"Error in register_and_queue: {e}")
             raise
-    
+
     @staticmethod
     def call_next_patient() -> dict | None:
         """Call the next patient in queue."""
@@ -123,7 +136,7 @@ class QueueService:
                     'message': 'Complete current consultation first',
                     'current_patient': QueueModel.serialize(current)
                 }
-            
+
             # Get next waiting patient
             waiting = QueueModel.get_waiting_queue()
             if not waiting:
@@ -131,28 +144,28 @@ class QueueService:
                     'success': False,
                     'message': 'No patients in queue'
                 }
-            
+
             next_patient = waiting[0]
             queue_id = str(next_patient['_id'])
-            
+
             # Update status to called
             QueueModel.update_status(queue_id, QueueModel.STATUS_CALLED)
-            
+
             # Get updated entry
             updated_entry = QueueModel.find_by_id(queue_id)
-            
+
             logger.info(f"Called patient: {next_patient['patient_name']} - Token: {next_patient['token_number']}")
-            
+
             return {
                 'success': True,
                 'patient': QueueModel.serialize(updated_entry),
                 'message': f"Called {next_patient['patient_name']} - Token #{next_patient['token_number']}"
             }
-            
+
         except Exception as e:
             logger.error(f"Error calling next patient: {e}")
             raise
-    
+
     @staticmethod
     def start_consultation(queue_id: str) -> dict:
         """Start consultation for called patient."""
@@ -160,9 +173,9 @@ class QueueService:
             queue_entry = QueueModel.find_by_id(queue_id)
             if not queue_entry:
                 return {'success': False, 'message': 'Queue entry not found'}
-            
+
             QueueModel.update_status(queue_id, QueueModel.STATUS_IN_CONSULTATION)
-            
+
             # Create consultation record
             consultation = ConsultationModel.create_consultation({
                 'patient_id': queue_entry['patient_id'],
@@ -172,17 +185,17 @@ class QueueService:
                 'doctor': queue_entry['doctor'],
                 'department': queue_entry['department']
             })
-            
+
             return {
                 'success': True,
                 'consultation_id': str(consultation['_id']),
                 'message': 'Consultation started'
             }
-            
+
         except Exception as e:
             logger.error(f"Error starting consultation: {e}")
             raise
-    
+
     @staticmethod
     def complete_consultation(queue_id: str, consultation_data: dict) -> dict:
         """Complete consultation and update records."""
@@ -190,38 +203,38 @@ class QueueService:
             queue_entry = QueueModel.find_by_id(queue_id)
             if not queue_entry:
                 return {'success': False, 'message': 'Queue entry not found'}
-            
+
             # Update queue status
             QueueModel.update_status(queue_id, QueueModel.STATUS_COMPLETED)
-            
+
             # Find and complete consultation record
             today = datetime.utcnow().date().isoformat()
             consultation = mongo.db.consultations.find_one({
                 'queue_id': queue_id,
                 'date': today
             })
-            
+
             if consultation:
                 ConsultationModel.complete_consultation(
                     str(consultation['_id']),
                     consultation_data
                 )
-            
+
             # Update patient visit count
             if queue_entry.get('patient_id'):
                 PatientModel.increment_visit_count(queue_entry['patient_id'])
-            
+
             logger.info(f"Consultation completed for Token: {queue_entry['token_number']}")
-            
+
             return {
                 'success': True,
                 'message': 'Consultation completed successfully'
             }
-            
+
         except Exception as e:
             logger.error(f"Error completing consultation: {e}")
             raise
-    
+
     @staticmethod
     def get_dashboard_data() -> dict:
         """Get comprehensive dashboard data."""
@@ -230,32 +243,34 @@ class QueueService:
             patient_stats = PatientModel.get_statistics()
             active_queue = QueueModel.get_active_queue()
             current = QueueModel.get_current_serving()
-            
+            doctor_stats = DoctorModel.get_statistics()
+
             serialized_queue = [QueueModel.serialize(e) for e in active_queue]
-            
+
             return {
                 'queue_stats': queue_stats,
                 'patient_stats': patient_stats,
+                'doctor_stats': doctor_stats,
                 'active_queue': serialized_queue,
                 'current_serving': QueueModel.serialize(current) if current else None,
                 'timestamp': datetime.utcnow().isoformat()
             }
-            
+
         except Exception as e:
             logger.error(f"Error getting dashboard data: {e}")
             raise
-    
+
     @staticmethod
     def get_departments() -> list:
         """Get list of departments."""
         return QueueService.DEPARTMENTS
-    
+
     @staticmethod
     def mark_no_show(queue_id: str) -> dict:
         """Mark patient as no-show."""
         QueueModel.update_status(queue_id, QueueModel.STATUS_NO_SHOW)
         return {'success': True, 'message': 'Marked as no-show'}
-    
+
     @staticmethod
     def cancel_queue_entry(token_number: int) -> dict:
         """Cancel a queue entry."""

@@ -1,5 +1,6 @@
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models.queue_model import QueueModel
+from models.doctor_model import DoctorModel
 from services.waittime_service import WaitTimeService
 from datetime import datetime
 import logging
@@ -13,10 +14,10 @@ def init_socketio(app):
     """Initialize SocketIO with app."""
     socketio.init_app(
         app,
-      cors_allowed_origins="*",
-    async_mode='threading',
-    logger=False,
-    engineio_logger=False
+        cors_allowed_origins="*",
+        async_mode='threading',
+        logger=False,
+        engineio_logger=False
     )
     register_events()
     return socketio
@@ -24,7 +25,7 @@ def init_socketio(app):
 
 def register_events():
     """Register all SocketIO events."""
-    
+
     @socketio.on('connect')
     def handle_connect():
         """Handle client connection."""
@@ -34,23 +35,23 @@ def register_events():
             'timestamp': datetime.utcnow().isoformat(),
             'message': 'Connected to Queue-Cure system'
         })
-    
+
     @socketio.on('disconnect')
     def handle_disconnect():
         """Handle client disconnection."""
         logger.info(f"Client disconnected: {request_sid()}")
-    
+
     @socketio.on('join_queue_room')
     def handle_join_queue(data):
         """Join queue monitoring room."""
         room = data.get('room', 'queue_updates')
         join_room(room)
-        
+
         # Send current queue state
         try:
             current = QueueModel.get_current_serving()
             stats = WaitTimeService.get_queue_statistics()
-            
+
             emit('queue_state', {
                 'current_serving': QueueModel.serialize(current) if current else None,
                 'stats': stats,
@@ -58,7 +59,7 @@ def register_events():
             })
         except Exception as e:
             logger.error(f"Join queue room error: {e}")
-    
+
     @socketio.on('join_token_room')
     def handle_join_token(data):
         """Join specific token's room for personalized updates."""
@@ -66,7 +67,7 @@ def register_events():
         if token_number:
             room = f'token_{token_number}'
             join_room(room)
-            
+
             # Send current status
             try:
                 entry = QueueModel.find_by_token(int(token_number))
@@ -79,14 +80,14 @@ def register_events():
                     })
             except Exception as e:
                 logger.error(f"Join token room error: {e}")
-    
+
     @socketio.on('leave_room_event')
     def handle_leave_room(data):
         """Leave a room."""
         room = data.get('room')
         if room:
             leave_room(room)
-    
+
     @socketio.on('request_queue_update')
     def handle_queue_update_request():
         """Handle request for queue update."""
@@ -94,7 +95,7 @@ def register_events():
             broadcast_queue_update()
         except Exception as e:
             logger.error(f"Queue update request error: {e}")
-    
+
     @socketio.on('ping')
     def handle_ping():
         """Handle ping for connection health check."""
@@ -106,20 +107,57 @@ def broadcast_queue_update():
     try:
         current = QueueModel.get_current_serving()
         active_queue = QueueModel.get_active_queue()
+        waiting_queue = QueueModel.get_waiting_queue()
         stats = WaitTimeService.get_queue_statistics()
-        
+
         data = {
             'current_serving': QueueModel.serialize(current) if current else None,
             'active_queue': [QueueModel.serialize(e) for e in active_queue],
+            'waiting_queue': [QueueModel.serialize(e) for e in waiting_queue],
             'stats': stats,
             'timestamp': datetime.utcnow().isoformat()
         }
-        
+
         socketio.emit('queue_update', data, room='queue_updates')
         logger.debug("Queue update broadcasted")
-        
+
     except Exception as e:
         logger.error(f"Broadcast error: {e}")
+
+
+def broadcast_doctors_update():
+    """Broadcast doctors list update to all connected clients."""
+    try:
+        doctors = DoctorModel.find_all()
+        stats = DoctorModel.get_statistics()
+
+        data = {
+            'doctors': [DoctorModel.serialize(d) for d in doctors],
+            'stats': stats,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+        socketio.emit('doctors_update', data, room='queue_updates')
+        logger.debug("Doctors update broadcasted")
+
+    except Exception as e:
+        logger.error(f"Doctors broadcast error: {e}")
+
+
+def broadcast_clinic_update():
+    """Broadcast clinic settings update to all connected clients."""
+    try:
+        from services.clinic_service import ClinicService
+        settings = ClinicService.get_settings()
+
+        socketio.emit('clinic_update', {
+            'settings': settings,
+            'timestamp': datetime.utcnow().isoformat()
+        }, room='queue_updates')
+        logger.debug("Clinic settings update broadcasted")
+
+    except Exception as e:
+        logger.error(f"Clinic broadcast error: {e}")
 
 
 def notify_patient_called(token_number: int, patient_name: str):
@@ -132,14 +170,14 @@ def notify_patient_called(token_number: int, patient_name: str):
             'message': f'🎉 {patient_name}, please proceed to the consultation room!',
             'timestamp': datetime.utcnow().isoformat()
         }, room=room)
-        
+
         # Also broadcast to queue room
         socketio.emit('patient_called_broadcast', {
             'token_display': f'TKN-{token_number:03d}',
             'message': f'Now serving Token #{token_number:03d}',
             'timestamp': datetime.utcnow().isoformat()
         }, room='queue_updates')
-        
+
     except Exception as e:
         logger.error(f"Patient notification error: {e}")
 
@@ -148,19 +186,19 @@ def notify_queue_position_update():
     """Notify all waiting patients of position updates."""
     try:
         waiting = QueueModel.get_waiting_queue()
-        
+
         for i, entry in enumerate(waiting):
             token_number = entry['token_number']
             room = f'token_{token_number}'
             wait_info = WaitTimeService.calculate_wait_time(token_number)
-            
+
             socketio.emit('position_update', {
                 'token_number': token_number,
                 'position': i + 1,
                 'wait_info': wait_info,
                 'timestamp': datetime.utcnow().isoformat()
             }, room=room)
-            
+
     except Exception as e:
         logger.error(f"Position update notification error: {e}")
 
