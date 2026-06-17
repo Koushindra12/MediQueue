@@ -78,9 +78,11 @@ class DoctorModel:
         if 'email' in update_data:
             update_data['email'] = update_data['email'].strip().lower()
         if 'experience_years' in update_data:
-            update_data['experience_years'] = int(update_data['experience_years'])
+    value = str(update_data['experience_years']).strip()
+    update_data['experience_years'] = int(value) if value else 0
         if 'consultation_fee' in update_data:
-            update_data['consultation_fee'] = float(update_data['consultation_fee'])
+    value = str(update_data['consultation_fee']).strip()
+    update_data['consultation_fee'] = float(value) if value else 0.0
 
         update_data['updated_at'] = datetime.utcnow()
 
